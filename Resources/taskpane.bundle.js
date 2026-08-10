@@ -16524,8 +16524,8 @@
       var RECIPIENT = "phishing@attensam.at";
       var msalConfig = {
         auth: {
-          clientId: "ASD",
-          authority: "https://login.microsoftonline.com/ASD"
+          clientId: "79c8c7da-d8e5-4bfc-a6b6-b0d8bf6cac0f",
+          authority: "https://login.microsoftonline.com/1333c2c2-fdf6-4fdc-8559-3dc12559d264"
         }
       };
       var tokenRequest = {
@@ -16535,12 +16535,12 @@
       Office.onReady(async (info) => {
         const sendButton = document.getElementById("sendButton");
         if (info.host !== Office.HostType.Outlook) {
-          showStatus("This page must be opened inside Outlook.", true);
+          showStatus("Dieses Website muss in Outlook geöffnet werden.", true);
           return;
         }
         const item = Office.context.mailbox.item;
         if (!item || item.itemType !== Office.MailboxEnums.ItemType.Message) {
-          showStatus("Select an email message first.", true);
+          showStatus("Wähle eine Email zuerst aus.", true);
           return;
         }
         try {
@@ -16549,116 +16549,68 @@
           sendButton.addEventListener("click", forwardAndDelete);
         } catch (error) {
           console.error(error);
-          showStatus("Microsoft authentication could not be initialized.", true);
+          showStatus("Microsoft Authentifizierung konnte nicht initialisiert werden.", true);
         }
       });
       async function forwardAndDelete() {
         const sendButton = document.getElementById("sendButton");
         sendButton.disabled = true;
-        showStatus("E-Mail wird weitergeleitet...");
+        showStatus("Email wird weitergeleitet...");
         try {
           const item = Office.context.mailbox.item;
           if (!item || !item.itemId) {
-            throw new Error("Outlook did not provide an ID for the selected email.");
+            throw new Error("Outlook hat keine ID für die gewählte Email gegeben.");
           }
           const graphMessageId = Office.context.mailbox.convertToRestId(
             item.itemId,
             Office.MailboxEnums.RestVersion.v2_0
           );
           const accessToken = await acquireGraphAccessToken();
+		  const forwardDraft = await graphRequest(
+			  `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
+				graphMessageId
+			  )}/createForward`,
+			  accessToken,
+			  {
+				method: "POST"
+			  }
+			);
 
-          const originalMessage = await graphRequest(
-            `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
-              graphMessageId
-            )}?$select=from,toRecipients,receivedDateTime`,
-            accessToken,
-            {
-              method: "GET"
-            }
-          );
+			if (!forwardDraft?.id) {
+			  throw new Error("Microsoft Graph hat keinen forward draft zurückgegeben.");
+			}
 
-          const senderAddress = originalMessage?.from?.emailAddress?.address || "Unbekannt";
-          const receiverAddresses = (originalMessage?.toRecipients || [])
-            .map((recipient) => recipient?.emailAddress?.address)
-            .filter(Boolean)
-            .join(", ") || "Unbekannt";
-          const receivedAt = formatReceivedAt(originalMessage?.receivedDateTime);
+			await graphRequest(
+			  `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
+				forwardDraft.id
+			  )}`,
+			  accessToken,
+			  {
+				method: "PATCH",
+				body: JSON.stringify({
+				  subject: `[PhishMelder] ${forwardDraft.subject || ""}`,
+				  toRecipients: [
+					{
+					  emailAddress: {
+						address: RECIPIENT
+					  }
+					}
+				  ]
+				})
+			  }
+			);
 
-          const forwardDraft = await graphRequest(
-            `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
-              graphMessageId
-            )}/createForward`,
-            accessToken,
-            {
-              method: "POST"
-            }
-          );
+			await graphRequest(
+			  `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
+				forwardDraft.id
+			  )}/send`,
+			  accessToken,
+			  {
+				method: "POST"
+			  }
+			);
 
-          if (!forwardDraft?.id) {
-            throw new Error("Microsoft Graph did not return a forward draft.");
-          }
-
-          const originalSubject = forwardDraft.subject || "";
-          const prefixedSubject = originalSubject.startsWith("[PhishMelder]")
-            ? originalSubject
-            : `[PhishMelder] ${originalSubject}`;
-
-          const draftBodyType = (forwardDraft.body?.contentType || "html").toLowerCase();
-          const draftBodyContent = forwardDraft.body?.content || "";
-          let updatedBody;
-
-          if (draftBodyType === "text") {
-            updatedBody = {
-              contentType: "text",
-              content:
-                `Sender: ${senderAddress}\n` +
-                `Receiver: ${receiverAddresses}\n` +
-                `Received at: ${receivedAt}\n\n` +
-                draftBodyContent
-            };
-          } else {
-            updatedBody = {
-              contentType: "html",
-              content:
-                `<div><strong>Sender:</strong> ${escapeHtml(senderAddress)}<br>` +
-                `<strong>Receiver:</strong> ${escapeHtml(receiverAddresses)}<br>` +
-                `<strong>Received at:</strong> ${escapeHtml(receivedAt)}</div><br>` +
-                draftBodyContent
-            };
-          }
-
-          await graphRequest(
-            `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
-              forwardDraft.id
-            )}`,
-            accessToken,
-            {
-              method: "PATCH",
-              body: JSON.stringify({
-                subject: prefixedSubject,
-                body: updatedBody,
-                toRecipients: [
-                  {
-                    emailAddress: {
-                      address: RECIPIENT
-                    }
-                  }
-                ]
-              })
-            }
-          );
-
-          await graphRequest(
-            `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
-              forwardDraft.id
-            )}/send`,
-            accessToken,
-            {
-              method: "POST"
-            }
-          );
-
-          showStatus("E-Mail weitergeleitet. Originale E-Mail wird gelöscht...");
+          showStatus("Email weitergeleitet. Originale Email wird gelöscht...");
           await graphRequest(
             `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
               graphMessageId
@@ -16669,46 +16621,25 @@
             }
           );
           showStatus(
-            "Die E-Mail wurde erfolgreich weitergeleitet. Die EDV-Abteilung überprüft sie und meldet sich bei dir so schnell wie möglich.",
+            "Mail wurde weitergeleitet, die originale wurde gelöscht.",
             false,
             true
           );
+		  
+		  showStatus(
+		  "Die E-Mail wurde erfolgreich weitergeleitet. Die EDV-Abteilung überprüft sie und meldet sich bei dir so schnell wie möglich.",
+		  false,
+		  true
+		);
+		
         } catch (error) {
           console.error(error);
           showStatus(
-            error.message || "The forward-and-delete operation failed.",
+            error.message || "Weiterleiten und löschen fehlgeschlagen.",
             true
           );
           sendButton.disabled = false;
         }
-      }
-      function formatReceivedAt(value) {
-        if (!value) {
-          return "Unbekannt";
-        }
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) {
-          return String(value);
-        }
-        const time = new Intl.DateTimeFormat("de-AT", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false
-        }).format(date);
-        const calendarDate = new Intl.DateTimeFormat("de-AT", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric"
-        }).format(date);
-        return `${time} ${calendarDate}`;
-      }
-      function escapeHtml(value) {
-        return String(value)
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#39;");
       }
       async function graphRequest(url, accessToken, options) {
         const response = await fetch(url, {
@@ -16748,7 +16679,7 @@
       }
       async function acquireGraphAccessToken() {
         if (!msalInstance) {
-          throw new Error("Microsoft authentication is not initialized.");
+          throw new Error("Microsoft Authentifizierung ist nicht initialisiert.");
         }
         try {
           const silentResult = await msalInstance.acquireTokenSilent(tokenRequest);
