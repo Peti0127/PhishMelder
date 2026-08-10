@@ -16588,7 +16588,7 @@
 			  {
 				method: "PATCH",
 				body: JSON.stringify({
-				  subject: `[PhishFänger] ${forwardDraft.subject || ""}`,
+				  subject: `[PhishMelder] ${forwardDraft.subject || ""}`,
 				  toRecipients: [
 					{
 					  emailAddress: {
