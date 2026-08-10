@@ -16524,8 +16524,8 @@
       var RECIPIENT = "phishing@attensam.at";
       var msalConfig = {
         auth: {
-		clientId: "79c8c7da-d8e5-4bfc-a6b6-b0d8bf6cac0f",
-		authority: "https://login.microsoftonline.com/1333c2c2-fdf6-4fdc-8559-3dc12559d264"
+		clientId: "ASD",
+		authority: "https://login.microsoftonline.com/ASD"
         }
       };
       var tokenRequest = {
@@ -16583,6 +16583,17 @@
             .filter(Boolean)
             .join(", ") || "Unbekannt";
           const receivedAt = formatReceivedAt(originalMessage?.receivedDateTime);
+          const originalSubjectFromGraph = originalMessage?.subject || "Unbekannt";
+          const messageId = originalMessage?.internetMessageId || getInternetHeader(originalMessage?.internetMessageHeaders, "Message-ID") || "N/A";
+          const returnPath = getInternetHeader(originalMessage?.internetMessageHeaders, "Return-Path") || "N/A";
+          const replyTo = getInternetHeader(originalMessage?.internetMessageHeaders, "Reply-To") || "N/A";
+          const authResults = getInternetHeader(originalMessage?.internetMessageHeaders, "Authentication-Results") || "";
+          const receivedSpf = getInternetHeader(originalMessage?.internetMessageHeaders, "Received-SPF") || "";
+          const spfResult = extractAuthResult(authResults, "spf") || extractLeadingAuthResult(receivedSpf) || "N/A";
+          const dkimResult = extractAuthResult(authResults, "dkim") || "N/A";
+          const dmarcResult = extractAuthResult(authResults, "dmarc") || "N/A";
+          const receivedHeaders = getAllInternetHeaders(originalMessage?.internetMessageHeaders, "Received");
+          const originServer = extractOriginServer(receivedHeaders) || "N/A";
 
           const forwardDraft = await graphRequest(
             `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
@@ -16611,18 +16622,38 @@
             updatedBody = {
               contentType: "text",
               content:
+                `--- PhishMelder Information ---\n\n` +
                 `Sender: ${senderAddress}\n` +
                 `Receiver: ${receiverAddresses}\n` +
-                `Received at: ${receivedAt}\n\n` +
+                `Received at: ${receivedAt}\n` +
+                `Subject: ${originalSubjectFromGraph}\n\n` +
+                `Return-Path: ${returnPath}\n` +
+                `Reply-To: ${replyTo}\n` +
+                `Message-ID: ${messageId}\n\n` +
+                `SPF: ${spfResult}\n` +
+                `DKIM: ${dkimResult}\n` +
+                `DMARC: ${dmarcResult}\n\n` +
+                `Received from: ${originServer}\n\n` +
+                `--- Original Email ---\n\n` +
                 draftBodyContent
             };
           } else {
             updatedBody = {
               contentType: "html",
               content:
-                `<div><strong>Sender:</strong> ${escapeHtml(senderAddress)}<br>` +
+                `<div><strong>--- PhishMelder Information ---</strong><br><br>` +
+                `<strong>Sender:</strong> ${escapeHtml(senderAddress)}<br>` +
                 `<strong>Receiver:</strong> ${escapeHtml(receiverAddresses)}<br>` +
-                `<strong>Received at:</strong> ${escapeHtml(receivedAt)}</div><br>` +
+                `<strong>Received at:</strong> ${escapeHtml(receivedAt)}<br>` +
+                `<strong>Subject:</strong> ${escapeHtml(originalSubjectFromGraph)}<br><br>` +
+                `<strong>Return-Path:</strong> ${escapeHtml(returnPath)}<br>` +
+                `<strong>Reply-To:</strong> ${escapeHtml(replyTo)}<br>` +
+                `<strong>Message-ID:</strong> ${escapeHtml(messageId)}<br><br>` +
+                `<strong>SPF:</strong> ${escapeHtml(spfResult)}<br>` +
+                `<strong>DKIM:</strong> ${escapeHtml(dkimResult)}<br>` +
+                `<strong>DMARC:</strong> ${escapeHtml(dmarcResult)}<br><br>` +
+                `<strong>Received from:</strong> ${escapeHtml(originServer)}<br><br>` +
+                `<strong>--- Original Email ---</strong></div><br>` +
                 draftBodyContent
             };
           }
@@ -16681,6 +16712,45 @@
           );
           sendButton.disabled = false;
         }
+      }
+      function getInternetHeader(headers, name) {
+        const matches = getAllInternetHeaders(headers, name);
+        return matches.length ? matches[0] : "";
+      }
+      function getAllInternetHeaders(headers, name) {
+        if (!Array.isArray(headers)) {
+          return [];
+        }
+        const wanted = String(name).toLowerCase();
+        return headers
+          .filter((header) => String(header?.name || "").toLowerCase() === wanted)
+          .map((header) => String(header?.value || "").trim())
+          .filter(Boolean);
+      }
+      function extractAuthResult(value, mechanism) {
+        if (!value) {
+          return "";
+        }
+        const match = String(value).match(new RegExp(`(?:^|[;\\s])${mechanism}\\s*=\\s*([a-zA-Z0-9_-]+)`, "i"));
+        return match ? match[1].toLowerCase() : "";
+      }
+      function extractLeadingAuthResult(value) {
+        if (!value) {
+          return "";
+        }
+        const match = String(value).trim().match(/^([a-zA-Z0-9_-]+)/);
+        return match ? match[1].toLowerCase() : "";
+      }
+      function extractOriginServer(receivedHeaders) {
+        if (!Array.isArray(receivedHeaders) || receivedHeaders.length === 0) {
+          return "";
+        }
+        const candidate = receivedHeaders[receivedHeaders.length - 1];
+        const fromMatch = candidate.match(/\bfrom\s+([^;]+?)(?=\s+by\s+|;|$)/i);
+        if (!fromMatch) {
+          return candidate;
+        }
+        return fromMatch[1].replace(/\s+/g, " ").trim();
       }
       function formatReceivedAt(value) {
         if (!value) {
