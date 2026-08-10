@@ -16524,8 +16524,8 @@
       var RECIPIENT = "phishing@attensam.at";
       var msalConfig = {
         auth: {
-		clientId: "ASD",
-		authority: "https://login.microsoftonline.com/ASD"
+		clientId: "79c8c7da-d8e5-4bfc-a6b6-b0d8bf6cac0f",
+		authority: "https://login.microsoftonline.com/1333c2c2-fdf6-4fdc-8559-3dc12559d264"
         }
       };
       var tokenRequest = {
