@@ -16524,8 +16524,8 @@
       var RECIPIENT = "phishing@attensam.at";
       var msalConfig = {
         auth: {
-		clientId: "79c8c7da-d8e5-4bfc-a6b6-b0d8bf6cac0f",
-		authority: "https://login.microsoftonline.com/1333c2c2-fdf6-4fdc-8559-3dc12559d264"
+		clientId: "ASD",
+		authority: "https://login.microsoftonline.com/ASD"
         }
       };
       var tokenRequest = {
@@ -16570,7 +16570,7 @@
           const originalMessage = await graphRequest(
             `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
               graphMessageId
-            )}?$select=from,toRecipients,receivedDateTime`,
+            )}?$select=subject,from,toRecipients,receivedDateTime,internetMessageHeaders`,
             accessToken,
             {
               method: "GET"
@@ -16583,17 +16583,14 @@
             .filter(Boolean)
             .join(", ") || "Unbekannt";
           const receivedAt = formatReceivedAt(originalMessage?.receivedDateTime);
-          const originalSubjectFromGraph = originalMessage?.subject || "Unbekannt";
-          const messageId = originalMessage?.internetMessageId || getInternetHeader(originalMessage?.internetMessageHeaders, "Message-ID") || "N/A";
-          const returnPath = getInternetHeader(originalMessage?.internetMessageHeaders, "Return-Path") || "N/A";
-          const replyTo = getInternetHeader(originalMessage?.internetMessageHeaders, "Reply-To") || "N/A";
-          const authResults = getInternetHeader(originalMessage?.internetMessageHeaders, "Authentication-Results") || "";
-          const receivedSpf = getInternetHeader(originalMessage?.internetMessageHeaders, "Received-SPF") || "";
-          const spfResult = extractAuthResult(authResults, "spf") || extractLeadingAuthResult(receivedSpf) || "N/A";
-          const dkimResult = extractAuthResult(authResults, "dkim") || "N/A";
-          const dmarcResult = extractAuthResult(authResults, "dmarc") || "N/A";
-          const receivedHeaders = getAllInternetHeaders(originalMessage?.internetMessageHeaders, "Received");
-          const originServer = extractOriginServer(receivedHeaders) || "N/A";
+          const internetHeaders = originalMessage?.internetMessageHeaders || [];
+          const returnPath = getHeaderValue(internetHeaders, "Return-Path");
+          const replyTo = getHeaderValue(internetHeaders, "Reply-To");
+          const messageId = getHeaderValue(internetHeaders, "Message-ID");
+          const spfResult = parseAuthResult(internetHeaders, "spf");
+          const dkimResult = parseAuthResult(internetHeaders, "dkim");
+          const dmarcResult = parseAuthResult(internetHeaders, "dmarc");
+          const origin = parseOriginatingServer(internetHeaders);
 
           const forwardDraft = await graphRequest(
             `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
@@ -16609,7 +16606,7 @@
             throw new Error("Microsoft Graph did not return a forward draft.");
           }
 
-          const originalSubject = forwardDraft.subject || "";
+          const originalSubject = originalMessage?.subject || forwardDraft.subject || "Unbekannt";
           const prefixedSubject = originalSubject.startsWith("[PhishMelder]")
             ? originalSubject
             : `[PhishMelder] ${originalSubject}`;
@@ -16626,14 +16623,15 @@
                 `Sender: ${senderAddress}\n` +
                 `Receiver: ${receiverAddresses}\n` +
                 `Received at: ${receivedAt}\n` +
-                `Subject: ${originalSubjectFromGraph}\n\n` +
+                `Subject: ${originalSubject}\n\n` +
                 `Return-Path: ${returnPath}\n` +
                 `Reply-To: ${replyTo}\n` +
                 `Message-ID: ${messageId}\n\n` +
                 `SPF: ${spfResult}\n` +
                 `DKIM: ${dkimResult}\n` +
                 `DMARC: ${dmarcResult}\n\n` +
-                `Received from: ${originServer}\n\n` +
+                `Originating server: ${origin.server}\n` +
+                `Originating IP: ${origin.ip}\n\n` +
                 `--- Original Email ---\n\n` +
                 draftBodyContent
             };
@@ -16641,18 +16639,20 @@
             updatedBody = {
               contentType: "html",
               content:
-                `<div><strong>--- PhishMelder Information ---</strong><br><br>` +
+                `<div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.45">` +
+                `<strong>--- PhishMelder Information ---</strong><br><br>` +
                 `<strong>Sender:</strong> ${escapeHtml(senderAddress)}<br>` +
                 `<strong>Receiver:</strong> ${escapeHtml(receiverAddresses)}<br>` +
                 `<strong>Received at:</strong> ${escapeHtml(receivedAt)}<br>` +
-                `<strong>Subject:</strong> ${escapeHtml(originalSubjectFromGraph)}<br><br>` +
+                `<strong>Subject:</strong> ${escapeHtml(originalSubject)}<br><br>` +
                 `<strong>Return-Path:</strong> ${escapeHtml(returnPath)}<br>` +
                 `<strong>Reply-To:</strong> ${escapeHtml(replyTo)}<br>` +
                 `<strong>Message-ID:</strong> ${escapeHtml(messageId)}<br><br>` +
                 `<strong>SPF:</strong> ${escapeHtml(spfResult)}<br>` +
                 `<strong>DKIM:</strong> ${escapeHtml(dkimResult)}<br>` +
                 `<strong>DMARC:</strong> ${escapeHtml(dmarcResult)}<br><br>` +
-                `<strong>Received from:</strong> ${escapeHtml(originServer)}<br><br>` +
+                `<strong>Originating server:</strong> ${escapeHtml(origin.server)}<br>` +
+                `<strong>Originating IP:</strong> ${escapeHtml(origin.ip)}<br><br>` +
                 `<strong>--- Original Email ---</strong></div><br>` +
                 draftBodyContent
             };
@@ -16712,45 +16712,6 @@
           );
           sendButton.disabled = false;
         }
-      }
-      function getInternetHeader(headers, name) {
-        const matches = getAllInternetHeaders(headers, name);
-        return matches.length ? matches[0] : "";
-      }
-      function getAllInternetHeaders(headers, name) {
-        if (!Array.isArray(headers)) {
-          return [];
-        }
-        const wanted = String(name).toLowerCase();
-        return headers
-          .filter((header) => String(header?.name || "").toLowerCase() === wanted)
-          .map((header) => String(header?.value || "").trim())
-          .filter(Boolean);
-      }
-      function extractAuthResult(value, mechanism) {
-        if (!value) {
-          return "";
-        }
-        const match = String(value).match(new RegExp(`(?:^|[;\\s])${mechanism}\\s*=\\s*([a-zA-Z0-9_-]+)`, "i"));
-        return match ? match[1].toLowerCase() : "";
-      }
-      function extractLeadingAuthResult(value) {
-        if (!value) {
-          return "";
-        }
-        const match = String(value).trim().match(/^([a-zA-Z0-9_-]+)/);
-        return match ? match[1].toLowerCase() : "";
-      }
-      function extractOriginServer(receivedHeaders) {
-        if (!Array.isArray(receivedHeaders) || receivedHeaders.length === 0) {
-          return "";
-        }
-        const candidate = receivedHeaders[receivedHeaders.length - 1];
-        const fromMatch = candidate.match(/\bfrom\s+([^;]+?)(?=\s+by\s+|;|$)/i);
-        if (!fromMatch) {
-          return candidate;
-        }
-        return fromMatch[1].replace(/\s+/g, " ").trim();
       }
       function formatReceivedAt(value) {
         if (!value) {
@@ -16836,7 +16797,46 @@
           }
         }
       }
-      function showStatus(message, isError = false, isSuccess = false) {
+      function getHeaderValues(headers, name) {
+  return (headers || [])
+    .filter((h) => (h?.name || "").toLowerCase() === name.toLowerCase())
+    .map((h) => h?.value || "")
+    .filter(Boolean);
+}
+
+function getHeaderValue(headers, name) {
+  return getHeaderValues(headers, name)[0] || "N/A";
+}
+
+function parseAuthResult(headers, key) {
+  const auth = getHeaderValues(headers, "Authentication-Results").join("; ");
+  const re = new RegExp(`(?:^|[;\s])${key}\s*=\s*([a-zA-Z0-9_-]+)`, "i");
+  const m = auth.match(re);
+  if (m) return m[1].toLowerCase();
+  if (key.toLowerCase() === "spf") {
+    const spf = getHeaderValue(headers, "Received-SPF");
+    const sm = spf.match(/^\s*([a-zA-Z0-9_-]+)/);
+    if (sm) return sm[1].toLowerCase();
+  }
+  return "N/A";
+}
+
+function parseOriginatingServer(headers) {
+  const received = getHeaderValues(headers, "Received");
+  if (!received.length) return { server: "N/A", ip: "N/A" };
+
+  // Received headers are ordered newest-first. The last hop is generally closest to the origin.
+  const candidate = received[received.length - 1];
+  const fromMatch = candidate.match(/\bfrom\s+([^\s(;]+)/i);
+  const ipMatch = candidate.match(/\[([0-9a-fA-F:.]+)\]/);
+
+  return {
+    server: fromMatch?.[1] || "N/A",
+    ip: ipMatch?.[1] || "N/A"
+  };
+}
+
+function showStatus(message, isError = false, isSuccess = false) {
         const status = document.getElementById("status");
         status.textContent = message;
         status.className = isError ? "error" : isSuccess ? "success" : "";
