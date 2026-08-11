@@ -16689,17 +16689,7 @@
             }
           );
 
-          showStatus(
-            "Die E-Mail wurde erfolgreich weitergeleitet. Die EDV-Abteilung überprüft sie und meldet sich bei dir so schnell wie möglich.",
-            false,
-            true
-          );
-
-          // Keep the success confirmation visible for 5 seconds before
-          // deleting the original message. Deleting the selected message can
-          // cause Outlook to navigate away and close/refresh the task pane.
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-
+          showStatus("E-Mail weitergeleitet. Originale E-Mail wird gelöscht...");
           await graphRequest(
             `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(
               graphMessageId
@@ -16709,6 +16699,16 @@
               method: "DELETE"
             }
           );
+
+          showStatus(
+            "Die E-Mail wurde erfolgreich weitergeleitet. Die EDV-Abteilung überprüft sie und meldet sich bei dir so schnell wie möglich.",
+            false,
+            true
+          );
+
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+
+          showStatus("");
         } catch (error) {
           console.error(error);
           showStatus(
