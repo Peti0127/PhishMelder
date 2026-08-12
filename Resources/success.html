@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhishMelder – Erfolgreich gemeldet</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #242424;
+      background: #ffffff;
+    }
+    main {
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+    .check {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 18px;
+      border: 3px solid #107c10;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #107c10;
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 700;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 22px;
+      font-weight: 600;
+    }
+    p {
+      margin: 0 0 22px;
+      line-height: 1.5;
+      font-size: 15px;
+    }
+    button {
+      border: 0;
+      border-radius: 4px;
+      padding: 10px 22px;
+      min-width: 120px;
+      font: inherit;
+      font-weight: 600;
+      color: #ffffff;
+      background: #0f6cbd;
+      cursor: pointer;
+    }
+    button:hover { background: #115ea3; }
+    button:focus-visible { outline: 2px solid #242424; outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="check" aria-hidden="true">✓</div>
+    <h1>E-Mail erfolgreich gemeldet</h1>
+    <p>
+      Die E-Mail wurde erfolgreich an die EDV weitergeleitet und aus deinem Postfach gelöscht.
+      Die EDV-Abteilung überprüft die Meldung.
+    </p>
+    <button id="closeButton" type="button">Schließen</button>
+  </main>
+
+  <script>
+    Office.onReady(() => {
+      document.getElementById("closeButton").addEventListener("click", () => {
+        Office.context.ui.messageParent("closeAddin");
+      });
+    });
+  </script>
+</body>
+</html>

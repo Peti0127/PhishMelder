@@ -16700,15 +16700,7 @@
             }
           );
 
-          showStatus(
-            "Die E-Mail wurde erfolgreich weitergeleitet. Die EDV-Abteilung überprüft sie und meldet sich bei dir so schnell wie möglich.",
-            false,
-            true
-          );
-
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-
-          showStatus("");
+          await openSuccessDialog();
         } catch (error) {
           console.error(error);
           showStatus(
@@ -16718,6 +16710,39 @@
           sendButton.disabled = false;
         }
       }
+      function openSuccessDialog() {
+        return new Promise((resolve, reject) => {
+          const successUrl = new URL("./success.html", window.location.href).href;
+
+          Office.context.ui.displayDialogAsync(
+            successUrl,
+            { height: 32, width: 28 },
+            (asyncResult) => {
+              if (asyncResult.status === Office.AsyncResultStatus.Failed) {
+                reject(new Error(`Success dialog could not be opened: ${asyncResult.error.message}`));
+                return;
+              }
+
+              const dialog = asyncResult.value;
+
+              dialog.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
+                if (arg.message === "closeAddin") {
+                  dialog.close();
+                  resolve();
+                  setTimeout(() => {
+                    Office.context.ui.closeContainer();
+                  }, 0);
+                }
+              });
+
+              dialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
+                resolve();
+              });
+            }
+          );
+        });
+      }
+
       function formatReceivedAt(value) {
         if (!value) {
           return "Unbekannt";
