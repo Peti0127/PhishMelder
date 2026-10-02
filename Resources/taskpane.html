@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhishMelder</title>
+
+  <!-- Required Outlook/Office JavaScript runtime -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script defer src="./taskpane.bundle.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 30px;
+      min-height: 100vh;
+      font-family: "Aptos", "Segoe UI", Arial, sans-serif;
+      color: #242424;
+      background: #ffffff;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background: #f3f8fc url("./Images/background.jpg") center left / auto no-repeat;
+    }
+
+    main { max-width: 420px; }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 20px;
+      font-weight: 600;
+      color: #1f1f1f;
+    }
+
+    p {
+      margin: 0 0 14px;
+      line-height: 1.5;
+      color: #424242;
+    }
+
+    .recipient { color: #d97706; }
+
+    button {
+      min-width: 100px;
+      border: 0;
+      border-radius: 5px;
+      padding: 10px 18px;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      color: #ffffff;
+      background: #eb830c;
+      cursor: pointer;
+    }
+    button:hover { background: #d97706; }
+    button:focus-visible { outline: 2px solid #1f1f1f; outline-offset: 2px; }
+    button:disabled { cursor: default; background: #a7a7a7; }
+
+    #status {
+      min-height: 24px;
+      margin-top: 16px;
+      font-size: 16px;
+      line-height: 1.4;
+    }
+    .error { color: #a4262c; }
+
+    .check {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 16px;
+      border: 3px solid #107c10;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #107c10;
+      font-size: 28px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <section id="report">
+      <h1>Verdächtige E-Mail?</h1>
+      <p><strong>Hier kannst du sie an die EDV melden.</strong></p>
+      <p>Die Meldung geht an <strong class="recipient">phishing@attensam.at</strong>. Danach wird die E-Mail nach <em>Gelöschte Elemente › Gemeldete Emails</em> verschoben.</p>
+
+      <button id="sendButton" type="button" disabled>Melden</button>
+      <div id="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="success" hidden>
+      <div class="check" aria-hidden="true">✓</div>
+      <h1>E-Mail gemeldet</h1>
+      <p>Die E-Mail wurde an die EDV weitergeleitet und nach <em>Gelöschte Elemente › Gemeldete Emails</em> verschoben. Die EDV überprüft die Meldung.</p>
+      <button id="closeButton" type="button">Schließen</button>
+    </section>
+  </main>
+</body>
+</html>
